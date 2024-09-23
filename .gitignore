@@ -1,2 +1,2 @@
 # ignore secret files
-secret/
+secret.py
