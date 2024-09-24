@@ -20,7 +20,16 @@ def buy(quantity, trading_client):
         time_in_force=TimeInForce.GTC
     )
 
-    trading_client.submit_order(order_data=market_order_data)
+    order = trading_client.submit_order(order_data=market_order_data)
+
+    while 1:
+        order_status = trading_client.get_order_by_id(order.id).status
+        if order_status == "filled":
+            break
+        else:
+            print("waiting")
+            sleep(1)
+
     print("Bought: " + str(datetime.now()))
 
 def sell(quantity, trading_client):
@@ -31,7 +40,15 @@ def sell(quantity, trading_client):
         time_in_force=TimeInForce.GTC
     )
 
-    trading_client.submit_order(order_data=market_order_data)
+    order = trading_client.submit_order(order_data=market_order_data)
+
+    while 1:
+        order_status = trading_client.get_order_by_id(order.id).status
+        if order_status == "filled":
+            break
+        else:
+            print("waiting")
+            sleep(1)
 
     print("Sold: " + str(datetime.now()))
 
@@ -45,11 +62,12 @@ def main():
     latest_quote = history_client.get_crypto_latest_quote(quote_params)
     ask = latest_quote["BTC/USD"].ask_price
     bid = latest_quote["BTC/USD"].bid_price
+
+    last_ask = ask
     last_bid = bid
 
     while 1 :
-        buying_power = float(account.buying_power)
-        spread = ask - bid
+        buying_power = float(account.non_marginable_buying_power)
 
         latest_quote = history_client.get_crypto_latest_quote(quote_params)
         ask = latest_quote["BTC/USD"].ask_price
@@ -76,7 +94,7 @@ def main():
 
         price_range = highest_price - lowest_price
 
-        if bid - last_bid > spread:
+        if bid > last_ask:
             if price_range/bid > 0.005:
                 print("Momentum")
                 buy((buying_power/2) / ask, trading_client)
@@ -85,15 +103,18 @@ def main():
                 print("Mean Reversion")
                 sell(float(trading_client.get_open_position("BTCUSD").qty) / 2, trading_client)
                 print()
+            last_ask = ask
             last_bid = bid
-        elif bid - last_bid < -spread:
+        elif ask < last_bid:
             if price_range / bid > 0.005:
                 print("Momentum")
                 sell(float(trading_client.get_open_position("BTCUSD").qty) / 2, trading_client)
+                print()
             else:
                 print("Mean Reversion")
                 buy((buying_power/2) / ask, trading_client)
                 print()
+            last_ask = ask
             last_bid = bid
 
         sleep(1)
