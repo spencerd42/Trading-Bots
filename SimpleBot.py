@@ -52,6 +52,12 @@ def sell(quantity, trading_client):
 
     print("Sold: " + str(datetime.now()))
 
+def print_stats(bid, last_bid, ask):
+    print("Last bid: " + last_bid)
+    print("Bid: " + bid)
+    print("Ask: " + ask)
+
+
 def main():
     history_client = CryptoHistoricalDataClient()
     quote_params = CryptoLatestQuoteRequest(symbol_or_symbols="BTC/USD")
@@ -98,10 +104,12 @@ def main():
             if price_range/bid > 0.005:
                 print("Momentum")
                 buy((buying_power/2) / ask, trading_client)
+                print_stats(bid, last_bid, ask)
                 print()
             else:
                 print("Mean Reversion")
                 sell(float(trading_client.get_open_position("BTCUSD").qty) / 2, trading_client)
+                print_stats(bid, last_bid, ask)
                 print()
             last_ask = ask
             last_bid = bid
@@ -109,10 +117,12 @@ def main():
             if price_range / bid > 0.005:
                 print("Momentum")
                 sell(float(trading_client.get_open_position("BTCUSD").qty) / 2, trading_client)
+                print_stats(bid, last_bid, ask)
                 print()
             else:
                 print("Mean Reversion")
                 buy((buying_power/2) / ask, trading_client)
+                print_stats(bid, last_bid, ask)
                 print()
             last_ask = ask
             last_bid = bid
