@@ -18,14 +18,15 @@ START_BALANCE = 100000
 # Percent of balance to use on each trade
 TRADE_STRENGTH = 0.5
 
-VOLATILITY_CUTOFF = 0.01
+VOLATILITY_CUTOFF = 0.005
 
 # Initialize the client with your API key and secret
 api_key = secret.api_key
 api_secret = secret.api_secret
 client = CryptoHistoricalDataClient(api_key, api_secret)
 
-# Define the time range for the data
+# test range
+# 2021 - present data
 start_time = datetime(2022, 7, 4)
 end_time = datetime(2023,8, 2)
 
@@ -54,11 +55,6 @@ print("Converting to DataFrame...")
 trade_data = trade_bars.df
 range_data = range_bars.df
 
-print(trade_data)
-
-# pd.set_option('display.max_rows', None)  # Show all rows
-# pd.set_option('display.max_columns', None)  # Show all columns
-
 print("Testing...")
 
 last_open = trade_data["open"].iloc[0]
@@ -74,7 +70,9 @@ for i in range(trade_data["open"].size):
     low = trade_data["low"].iloc[i]
 
     percent_change = 1 - (open/last_open)
-    range_index = int(i / RANGE_INTERVAL)
+    range_index = int(i / RANGE_INTERVAL) - 1
+    if range_index < 0:
+        continue
     range = range_data["high"].iloc[range_index] - range_data["low"].iloc[range_index]
     volatile = range > open * VOLATILITY_CUTOFF
 
