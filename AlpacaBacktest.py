@@ -6,13 +6,19 @@ from datetime import datetime
 
 import secret
 
-# Time interval for data
-INTERVAL = 10
+TRADE_INTERVAL = 5
+
+RANGE_INTERVAL = 30
 
 # Percent change to trigger action
 TRIGGER = 0.01
 
 START_BALANCE = 100000
+
+# Percent of balance to use on each trade
+TRADE_STRENGTH = 0.5
+
+VOLATILITY_CUTOFF = 0.01
 
 # Initialize the client with your API key and secret
 api_key = secret.api_key
@@ -20,45 +26,57 @@ api_secret = secret.api_secret
 client = CryptoHistoricalDataClient(api_key, api_secret)
 
 # Define the time range for the data
-start_time = datetime(2022, 7, 8)
-end_time = datetime(2023, 9, 15)
+start_time = datetime(2022, 7, 4)
+end_time = datetime(2023,8, 2)
 
-# Create a request object for historical crypto bars (BTCUSD, 1 minute bars)
-request_params = CryptoBarsRequest(
-    symbol_or_symbols="BTC/USD", # Use symbol_or_symbols instead of symbol
-    timeframe=TimeFrame(INTERVAL, TimeFrameUnit.Minute),  # Time interval
-    start=start_time,            # Start date of the data
-    end=end_time                 # End date of the data
+# Create a request object for historical crypto bars
+trade_request = CryptoBarsRequest(
+    symbol_or_symbols="BTC/USD",
+    timeframe=TimeFrame(TRADE_INTERVAL, TimeFrameUnit.Minute),
+    start=start_time,
+    end=end_time
+)
+
+range_request = CryptoBarsRequest(
+    symbol_or_symbols="BTC/USD",
+    timeframe=TimeFrame(RANGE_INTERVAL, TimeFrameUnit.Minute),
+    start=start_time,
+    end=end_time
 )
 
 print("Retrieving bars...")
 # Fetch historical data using the client
-bars = client.get_crypto_bars(request_params)
+trade_bars = client.get_crypto_bars(trade_request)
+range_bars = client.get_crypto_bars(range_request)
 
 print("Converting to DataFrame...")
 # Convert to a DataFrame (bars.df is a pandas DataFrame)
-data = bars.df
+trade_data = trade_bars.df
+range_data = range_bars.df
+
+print(trade_data)
 
 # pd.set_option('display.max_rows', None)  # Show all rows
 # pd.set_option('display.max_columns', None)  # Show all columns
 
 print("Testing...")
 
-last_open = data["open"].iloc[0]
+last_open = trade_data["open"].iloc[0]
 count = 0
-buy_and_hold = data["open"].iloc[data["open"].size - 1] / data["open"].iloc[0]
+buy_and_hold = trade_data["open"].iloc[trade_data["open"].size - 1] / trade_data["open"].iloc[0]
 usd_balance = 0.5 * START_BALANCE
 btc_balance = 0.5 * START_BALANCE / last_open
 volatile_count = 0
 
-for i in range(data["open"].size):
-    open = data["open"].iloc[i]
-    high = data["high"].iloc[i]
-    low = data["low"].iloc[i]
+for i in range(trade_data["open"].size):
+    open = trade_data["open"].iloc[i]
+    high = trade_data["high"].iloc[i]
+    low = trade_data["low"].iloc[i]
 
     percent_change = 1 - (open/last_open)
-    range = high - low
-    volatile = range > open * 0.01
+    range_index = int(i / RANGE_INTERVAL)
+    range = range_data["high"].iloc[range_index] - range_data["low"].iloc[range_index]
+    volatile = range > open * VOLATILITY_CUTOFF
 
     if abs(percent_change) > TRIGGER:
         count += 1
@@ -68,18 +86,18 @@ for i in range(data["open"].size):
 
         if ((percent_change > TRIGGER) and volatile) or ((percent_change < TRIGGER) and not volatile):
             # buy
-            btc_balance += (usd_balance / 2) / open
-            usd_balance /= 2
+            btc_balance += (usd_balance * TRADE_STRENGTH) / open
+            usd_balance *= (1 - TRADE_STRENGTH)
         else:
             # sell
-            usd_balance += (btc_balance / 2) * open
-            btc_balance /= 2
+            usd_balance += (btc_balance * TRADE_STRENGTH) * open
+            btc_balance *= (1 - TRADE_STRENGTH)
 
-        print("USD: " + str(usd_balance))
-        print("BTC: " + str(btc_balance * open))
-        print()
+        # print("USD: " + str(usd_balance))
+        # print("BTC: " + str(btc_balance * open))
+        # print()
 
-final_balance = usd_balance + btc_balance * data["open"].iloc[data["open"].size - 1]
+final_balance = usd_balance + btc_balance * trade_data["open"].iloc[trade_data["open"].size - 1]
 final_return = final_balance/START_BALANCE
 
 print("Actions: " + str(count))
