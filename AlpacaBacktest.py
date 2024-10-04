@@ -3,34 +3,42 @@ from alpaca.data.historical import CryptoHistoricalDataClient
 from alpaca.data.requests import CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from datetime import datetime
-from Range import Range
 
+from Range import Range
 import secret
 
-TRADE_INTERVAL = 5
+# check for trade opportunities every x minutes
+TRADE_INTERVAL = 30
 
-RANGE_INTERVAL = 60
+# Used to calculate price range over the last x minutes
+RANGE_INTERVAL = 120
 
 # Percent change to trigger action
-TRIGGER = 0.01
+TRIGGER = 0.05
 
+# Start balance in USD
 START_BALANCE = 100000
 
 # Percent of balance to use on each trade
 TRADE_STRENGTH = 0.5
 
-VOLATILITY_CUTOFF = 0.01
+# Consider the currency volatile if the price range is greater than this percentage
+VOLATILITY_CUTOFF = 0.02
+
+# Fee for each trade
+FEE = 0.0025
+FEE_MULT = 1 - FEE
 
 api_key = secret.api_key
 api_secret = secret.api_secret
 client = CryptoHistoricalDataClient(api_key, api_secret)
 
 # test range
-# 2021 - present data
-# start_time = datetime(2022, 7, 4)
-# end_time = datetime(2023,8, 2)
-start_time = datetime(2024, 3, 1)
-end_time = datetime(2024,9, 1)
+# data available from 2021 - present
+start_time = datetime(2024, 1, 1)
+end_time = datetime(2024,10, 1)
+# start_time = datetime(2021, 1, 1)
+# end_time = datetime(2024,10, 1)
 
 # historical data request for trading data
 trade_request = CryptoBarsRequest(
@@ -48,11 +56,13 @@ trade_data = trade_bars.df
 
 print("Testing...")
 
+avg_cost_basis = trade_data["open"].iloc[0]
 last_open = trade_data["open"].iloc[0]
-count = 0
+transactions = 0
 buy_and_hold = trade_data["open"].iloc[trade_data["open"].size - 1] / trade_data["open"].iloc[0]
+# start with half invested and half not
 usd_balance = 0.5 * START_BALANCE
-btc_balance = 0.5 * START_BALANCE / last_open
+btc_balance = (0.5 * START_BALANCE / trade_data["open"].iloc[0]) * FEE_MULT
 volatile_count = 0
 
 price_range = Range(RANGE_INTERVAL, TRADE_INTERVAL)
@@ -66,22 +76,25 @@ for i in range(trade_data["open"].size):
 
     open = trade_data["open"].iloc[i]
 
-    percent_change = 1 - (open/last_open)
+    cost_basis_change = 1 - (open/avg_cost_basis)
+    change_since_last = 1 - (open/last_open)
     volatile = range_diff > open * VOLATILITY_CUTOFF
 
-    if abs(percent_change) > TRIGGER:
-        count += 1
+    if abs(cost_basis_change) > TRIGGER:
+        transactions += 1
         last_open = open
         if volatile:
             volatile_count += 1
 
-        if ((percent_change > TRIGGER) and volatile) or ((percent_change < TRIGGER) and not volatile):
+        if ((cost_basis_change > TRIGGER) and volatile) or ((cost_basis_change < TRIGGER) and not volatile):
             # buy
-            btc_balance += (usd_balance * TRADE_STRENGTH) / open
+            trade_value = ((usd_balance * TRADE_STRENGTH) / open) * FEE_MULT
+            avg_cost_basis = (avg_cost_basis * btc_balance / (btc_balance + trade_value)) + (open * trade_value / (btc_balance + trade_value))
+            btc_balance += trade_value
             usd_balance *= (1 - TRADE_STRENGTH)
         else:
             # sell
-            usd_balance += (btc_balance * TRADE_STRENGTH) * open
+            usd_balance += ((btc_balance * TRADE_STRENGTH) * open) * FEE_MULT
             btc_balance *= (1 - TRADE_STRENGTH)
 
         # print("USD: " + str(usd_balance))
@@ -91,7 +104,7 @@ for i in range(trade_data["open"].size):
 final_balance = usd_balance + btc_balance * trade_data["open"].iloc[trade_data["open"].size - 1]
 final_return = final_balance/START_BALANCE
 
-print("Actions: " + str(count))
+print("Actions: " + str(transactions))
 print("Volatile trades: " + str(volatile_count))
 print("Final return: " + str(final_return))
 print("Buy and hold: " + str(buy_and_hold))

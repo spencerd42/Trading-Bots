@@ -25,9 +25,16 @@ class Range:
             self.min = min(self.min, low)
         else:
             if self.max == self.highs.popleft():
-                self.get_max()
+                # don't need to search for new max if new element is greater than old max
+                if high > self.max:
+                    self.max = high
+                else:
+                    self.get_max()
             if self.min == self.lows.popleft():
-                self.get_min()
+                if low < self.min:
+                    self.min = low
+                else:
+                    self.get_min()
         self.size += 1
 
     def get_max(self):
