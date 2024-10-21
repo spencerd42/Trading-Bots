@@ -9,8 +9,9 @@ class Range:
         self.size = 0
         self.highs = deque([])
         self.lows = deque([])
-        self.max = 0
-        self.min = 0
+        self.max = float('-inf')
+        self.min = float('inf')
+        self.sum = 0
 
     # add the next element to the range and recalculate max and min if necessary
     def add(self, high, low):
@@ -20,22 +21,28 @@ class Range:
 
         self.highs.append(high)
         self.lows.append(low)
+
+        self.sum += high + low
+
         if self.size < self.capacity:
             self.max = max(self.max, high)
             self.min = min(self.min, low)
+            self.size += 1
         else:
-            if self.max == self.highs.popleft():
+            popped_high = self.highs.popleft()
+            popped_low = self.lows.popleft()
+            self.sum -= (popped_high + popped_low)
+            if self.max == popped_high:
                 # don't need to search for new max if new element is greater than old max
                 if high > self.max:
                     self.max = high
                 else:
                     self.get_max()
-            if self.min == self.lows.popleft():
+            if self.min == popped_low:
                 if low < self.min:
                     self.min = low
                 else:
                     self.get_min()
-        self.size += 1
 
     def get_max(self):
         self.max = self.highs[0]
@@ -46,3 +53,6 @@ class Range:
         self.min = self.lows[0]
         for low in self.lows:
             self.min = min(self.min, low)
+
+    def get_avg(self):
+        return self.sum / (self.capacity * 2)

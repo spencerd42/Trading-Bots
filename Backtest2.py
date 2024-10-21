@@ -1,3 +1,4 @@
+from IPython.utils.openpy import source_to_unicode
 from alpaca.data import TimeFrameUnit
 from alpaca.data.historical import CryptoHistoricalDataClient
 from alpaca.data.requests import CryptoBarsRequest
@@ -11,20 +12,19 @@ import secret
 TRADE_INTERVAL = 5
 
 # Used to calculate price range over the last x minutes
-RANGE_INTERVAL = 60
+RANGE_INTERVAL = 30
 
 # Percent change from cost basis to trigger action
-# TRIGGER = 0.00
+TRIGGER = 0.01
 
 # Percent change between consecutive trades
-SPACER = 0.02
+SPACER = 0.01
 
 # Start balance in USD
 START_BALANCE = 100000
 
-# Percent of starting balance to use on each trade
-TRADE_STRENGTH = 0.1
-TRADE_AMOUNT = START_BALANCE * TRADE_STRENGTH
+# Percent of balance to use on each trade
+TRADE_STRENGTH = 0.2
 
 # Consider the currency volatile if the price range is greater than this percentage
 VOLATILITY_CUTOFF = 0.01
@@ -39,10 +39,10 @@ client = CryptoHistoricalDataClient(api_key, api_secret)
 
 # test range
 # data available from 2021 - present
-# start_time = datetime(2021, 1, 1)
-# end_time = datetime(2022,1, 1)
-start_time = datetime(2022, 1, 1)
-end_time = datetime(2023,1, 1)
+start_time = datetime(2021, 1, 1)
+end_time = datetime(2022,1, 1)
+# start_time = datetime(2022, 1, 1)
+# end_time = datetime(2024,1, 1)
 
 # historical data request for trading data
 trade_request = CryptoBarsRequest(
@@ -85,30 +85,23 @@ for i in range(trade_data["close"].size):
     change_since_last = (close/last_close) - 1
     volatile = range_diff > close * VOLATILITY_CUTOFF
 
-    if abs(change_since_last) > SPACER:
+    if abs(change_since_last) > SPACER and abs(cost_basis_change) > TRIGGER:
         transactions += 1
         last_close = close
         if volatile:
             volatile_count += 1
 
-        if ((change_since_last < -SPACER) and volatile) or ((change_since_last > SPACER) and not volatile):
+        if (close > price_range.get_avg() and volatile) or (close < price_range.get_avg() and not volatile):
             # buy
-            if usd_balance > TRADE_AMOUNT:
-                usd_balance -= TRADE_AMOUNT
-                btc_balance += (TRADE_AMOUNT / close) * FEE_MULT
-            else:
-                transactions -= 1
-                if volatile:
-                    volatile_count -= 1
+            trade_value = ((usd_balance * TRADE_STRENGTH) / close) * FEE_MULT
+            avg_cost_basis = ((avg_cost_basis * btc_balance / (btc_balance + trade_value)) +
+                              (close * trade_value / (btc_balance + trade_value)))
+            btc_balance += trade_value
+            usd_balance *= (1 - TRADE_STRENGTH)
         else:
             # sell
-            if btc_balance > (TRADE_AMOUNT / close):
-                btc_balance -= (TRADE_AMOUNT / close)
-                usd_balance += TRADE_AMOUNT * FEE_MULT
-            else:
-                transactions -= 1
-                if volatile:
-                    volatile_count -= 1
+            usd_balance += ((btc_balance * TRADE_STRENGTH) * close) * FEE_MULT
+            btc_balance *= (1 - TRADE_STRENGTH)
 
 print("USD: " + str(usd_balance))
 print("BTC: " + str(btc_balance * trade_data["close"].iloc[trade_data["close"].size - 1]))
