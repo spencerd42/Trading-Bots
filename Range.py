@@ -12,12 +12,15 @@ class Range:
         self.max = float('-inf')
         self.min = float('inf')
         self.sum = 0
+        self.num_increases = 0
 
     # add the next element to the range and recalculate max and min if necessary
     def add(self, high, low):
         if self.size == 0:
             self.min = low
             self.max = high
+        elif (low + high) / 2 > (self.lows[-1] + self.highs[-1]) / 2:
+            self.num_increases += 1
 
         self.highs.append(high)
         self.lows.append(low)
@@ -31,6 +34,8 @@ class Range:
         else:
             popped_high = self.highs.popleft()
             popped_low = self.lows.popleft()
+            if (popped_low + popped_high) / 2 < (self.lows[0] + self.highs[0]) / 2:
+                self.num_increases -= 1
             self.sum -= (popped_high + popped_low)
             if self.max == popped_high:
                 # don't need to search for new max if new element is greater than old max
@@ -56,3 +61,6 @@ class Range:
 
     def get_avg(self):
         return self.sum / (self.capacity * 2)
+
+    def get_percent_increases(self):
+        return self.num_increases / (self.capacity - 1)

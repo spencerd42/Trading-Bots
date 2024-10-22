@@ -12,3 +12,5 @@ print(test_range.min)
 
 print(test_range.highs)
 print(test_range.lows)
+
+print(test_range.get_percent_increases())
