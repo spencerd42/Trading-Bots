@@ -54,45 +54,30 @@ START_BALANCE = trade_data["open"].iloc[0]
 TRADE_STRENGTH = 0.1
 TRADE_AMOUNT = START_BALANCE * TRADE_STRENGTH
 
-avg_cost_basis = trade_data["close"].iloc[0]
+cost_basis = trade_data["close"].iloc[0]
 transactions = 0
 buy_and_hold = trade_data["close"].iloc[trade_data["close"].size - 1] / trade_data["close"].iloc[0]
 # start with half invested and half not
 usd_balance = 0.5 * START_BALANCE
 btc_balance = (0.5 * START_BALANCE / trade_data["close"].iloc[0]) * FEE_MULT
 volatile_count = 0
-last_action = -10
 
-price_range = Range(RANGE_INTERVAL, TRADE_INTERVAL)
 results = [START_BALANCE]
 
 # Loop through price data
 for i in range(trade_data["close"].size):
-    price_range.add(trade_data["high"].iloc[i], trade_data["low"].iloc[i])
     close = trade_data["close"].iloc[i]
     balance = usd_balance + btc_balance * close
     results.append(balance)
-    if price_range.size < price_range.capacity:
-        continue
-    range_diff = price_range.max - price_range.min
-    range_diff_percent = range_diff / close
+    change = close / cost_basis
 
-    if range_diff_percent < MIN_RANGE_DIFF or i - last_action < 10:
-        continue
-    last_action = i
-    range_change = price_range.get_change()
+    if change > 2:
+        usd_balance += btc_balance * close * FEE_MULT
+        btc_balance = 0
 
-    if range_change > 0.02:
-        TRADE_AMOUNT = abs(price_range.get_percent_increases() - 0.5) * usd_balance * 2
-        usd_balance -= TRADE_AMOUNT
-        btc_balance += (TRADE_AMOUNT / close) * FEE_MULT
-        transactions += 1
-
-    elif range_change < -0.04:
-        TRADE_AMOUNT = abs(price_range.get_percent_increases() - 0.5) * btc_balance * close * 2
-        btc_balance -= (TRADE_AMOUNT / close)
-        usd_balance += TRADE_AMOUNT * FEE_MULT
-        transactions += 1
+    if balance / START_BALANCE > trade_data["close"].iloc[i] / trade_data["close"].iloc[0] and btc_balance == 0:
+        btc_balance += ((usd_balance / 2) / close)
+        usd_balance /= 2
 
 print("USD: " + str(usd_balance))
 print("BTC: " + str(btc_balance * trade_data["close"].iloc[trade_data["close"].size - 1]))

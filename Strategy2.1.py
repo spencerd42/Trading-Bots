@@ -6,19 +6,10 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
-from Range import Range
 import secret
 
 # check for trade opportunities every x minutes
 TRADE_INTERVAL = 10
-
-# Used to calculate price range over the last x minutes
-RANGE_INTERVAL = 240
-
-MIN_HOURLY_CHANGE = 0
-MIN_RANGE_DIFF = (RANGE_INTERVAL / 60) * MIN_HOURLY_CHANGE
-
-TRIGGER = 0.75
 
 # Fee for each trade
 FEE = 0.0025
@@ -36,7 +27,7 @@ end_time = datetime(2022,1, 1)
 # historical data request for trading data
 trade_request = CryptoBarsRequest(
     symbol_or_symbols="BTC/USD",
-    timeframe=TimeFrame(TRADE_INTERVAL, TimeFrameUnit.Minute),
+    timeframe=TimeFrame(TRADE_INTERVAL, TimeFrameUnit.Hour),
     start=start_time,
     end=end_time
 )
@@ -50,49 +41,69 @@ trade_data = trade_bars.df
 print("Testing...")
 
 START_BALANCE = trade_data["open"].iloc[0]
-# Percent of starting balance to use on each trade
-TRADE_STRENGTH = 0.1
-TRADE_AMOUNT = START_BALANCE * TRADE_STRENGTH
 
-avg_cost_basis = trade_data["close"].iloc[0]
+cost_basis = trade_data["close"].iloc[0]
 transactions = 0
 buy_and_hold = trade_data["close"].iloc[trade_data["close"].size - 1] / trade_data["close"].iloc[0]
 # start with half invested and half not
 usd_balance = 0.5 * START_BALANCE
-btc_balance = (0.5 * START_BALANCE / trade_data["close"].iloc[0]) * FEE_MULT
+start_usd = usd_balance
+btc_balance = ((START_BALANCE * 0.5) / trade_data["close"].iloc[0]) * FEE_MULT
+start_btc = btc_balance
+# usd_balance = 0
+# btc_balance = (START_BALANCE / trade_data["close"].iloc[0]) * FEE_MULT
 volatile_count = 0
-last_action = -10
 
-price_range = Range(RANGE_INTERVAL, TRADE_INTERVAL)
 results = [START_BALANCE]
+hold = [START_BALANCE]
 
 # Loop through price data
 for i in range(trade_data["close"].size):
-    price_range.add(trade_data["high"].iloc[i], trade_data["low"].iloc[i])
+    open = trade_data["open"].iloc[i]
     close = trade_data["close"].iloc[i]
     balance = usd_balance + btc_balance * close
     results.append(balance)
-    if price_range.size < price_range.capacity:
+    hold.append(start_usd + start_btc * close)
+    cur_return = (balance / START_BALANCE) - 1
+
+    above_hold = cur_return > trade_data["close"].iloc[i] / trade_data["close"].iloc[0]
+
+    change = (close - open) / open
+    if abs(change) < 0.01:
         continue
-    range_diff = price_range.max - price_range.min
-    range_diff_percent = range_diff / close
+    transactions += 1
+    if abs(change) > 1:
+        change = 1 * (change / abs(change))
+    if change >= 0:
+        # usd_balance += (btc_balance * change) * close * FEE_MULT
+        # btc_balance *= 1 - change
+        trade_amount = (usd_balance * abs(change))
+        trade_amount *= 5
+        if trade_amount > usd_balance:
+            trade_amount = usd_balance
+        btc_balance += (trade_amount / close) * FEE_MULT
+        usd_balance -= trade_amount
+    elif change < 0:
+        # btc_balance += ((usd_balance * abs(change)) / close) * FEE_MULT
+        # usd_balance *= change + 1
+        trade_amount = (btc_balance * abs(change)) * close
+        trade_amount *= 5
+        if trade_amount / close > btc_balance:
+            trade_amount = btc_balance * close
+        usd_balance += trade_amount * FEE_MULT
+        btc_balance -= trade_amount / close
 
-    if range_diff_percent < MIN_RANGE_DIFF or i - last_action < 10:
-        continue
-    last_action = i
-    range_change = price_range.get_change()
+    # if change > 0.02:
+    #     btc_balance += (usd_balance / close) * FEE_MULT
+    #     usd_balance = 0
+    # elif change < -0.01:
+    #     usd_balance += btc_balance * close * FEE_MULT
+    #     btc_balance = 0
 
-    if range_change > 0.02:
-        TRADE_AMOUNT = abs(price_range.get_percent_increases() - 0.5) * usd_balance * 2
-        usd_balance -= TRADE_AMOUNT
-        btc_balance += (TRADE_AMOUNT / close) * FEE_MULT
-        transactions += 1
-
-    elif range_change < -0.04:
-        TRADE_AMOUNT = abs(price_range.get_percent_increases() - 0.5) * btc_balance * close * 2
-        btc_balance -= (TRADE_AMOUNT / close)
-        usd_balance += TRADE_AMOUNT * FEE_MULT
-        transactions += 1
+    # if change > 0.04:
+    #     print(i)
+    #     btc_balance += (usd_balance / close) * 0.5 * FEE_MULT
+    #     usd_balance /= 2
 
 print("USD: " + str(usd_balance))
 print("BTC: " + str(btc_balance * trade_data["close"].iloc[trade_data["close"].size - 1]))
@@ -109,6 +120,8 @@ print("Buy and hold 1/2: " + str(1 + (buy_and_hold - 1) / 2))
 x = np.arange(0, trade_data["close"].size)
 btc_y = trade_data["close"].iloc[x]
 results_y = np.array(results)[x]
+hold_y = np.array(hold)[x]
 plt.plot(x, btc_y, label = "BTC")
 plt.plot(x, results_y, label = "Results")
+plt.plot(x, hold_y, label = "Hold")
 plt.show()

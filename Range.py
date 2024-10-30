@@ -64,3 +64,6 @@ class Range:
 
     def get_percent_increases(self):
         return self.num_increases / (self.capacity - 1)
+
+    def get_change(self):
+        return (self.highs[-1] - self.highs[0]) / self.highs[0]
