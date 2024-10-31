@@ -13,16 +13,16 @@ from Range import Range
 import secret
 
 # check for trade opportunities every x minutes
-TRADE_INTERVAL = 5
+TRADE_INTERVAL = 1
 
 # Used to calculate price range over the last x minutes
 RANGE_INTERVAL = 60
 
 # Percent change from cost basis to trigger action
-TRIGGER = 0.01
+TRIGGER = 0.1
 
 # Percent change between consecutive trades
-SPACER = 0.01
+SPACER = 0.1
 
 # Start balance in USD
 START_BALANCE = 100000
@@ -30,11 +30,8 @@ START_BALANCE = 100000
 # Percent of balance to use on each trade
 TRADE_STRENGTH = 0.5
 
-# Consider the currency volatile if the price range is greater than this percentage
-VOLATILITY_CUTOFF = 0.01
-
 # Fee for each trade
-FEE = 0.00
+FEE = 0.0025
 FEE_MULT = 1 - FEE
 
 api_key = secret.api_key
@@ -45,13 +42,11 @@ client = CryptoHistoricalDataClient(api_key, api_secret)
 # data available from 2021 - present
 start_time = datetime(2021, 1, 1)
 end_time = datetime(2024,1, 1)
-# start_time = datetime(2022, 1, 1)
-# end_time = datetime(2024,1, 1)
 
 # historical data request for trading data
 trade_request = CryptoBarsRequest(
     symbol_or_symbols="BTC/USD",
-    timeframe=TimeFrame(TRADE_INTERVAL, TimeFrameUnit.Minute),
+    timeframe=TimeFrame(TRADE_INTERVAL, TimeFrameUnit.Hour),
     start=start_time,
     end=end_time
 )
@@ -87,17 +82,16 @@ for i in range(trade_data["close"].size):
 
     range_diff = price_range.max - price_range.min
 
-    cost_basis_change = (close/avg_cost_basis) - 1
     change_since_last = -((close/last_close) - 1)
-    volatile = range_diff > close * VOLATILITY_CUTOFF
+
+    if range_diff < close * 0.02:
+        continue
 
     if abs(change_since_last) > SPACER:
         transactions += 1
         last_close = close
-        if volatile:
-            volatile_count += 1
 
-        if ((change_since_last > TRIGGER) and volatile) or ((change_since_last < TRIGGER) and not volatile):
+        if change_since_last > TRIGGER:
             # buy
             trade_value = ((usd_balance * TRADE_STRENGTH) / close) * FEE_MULT
             avg_cost_basis = ((avg_cost_basis * btc_balance / (btc_balance + trade_value)) +
@@ -117,7 +111,6 @@ final_balance = usd_balance + btc_balance * trade_data["close"].iloc[trade_data[
 final_return = final_balance/START_BALANCE
 
 print("Actions: " + str(transactions))
-print("Volatile trades: " + str(volatile_count))
 print("Final return: " + str(final_return))
 print("Buy and hold: " + str(buy_and_hold))
 
