@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from Range import Range
 import secret
 
-# check for trade opportunities every x minutes
+# check for trade opportunities every x hours
 TRADE_INTERVAL = 1
 
 # Used to calculate price range over the last x minutes
@@ -38,7 +38,7 @@ client = CryptoHistoricalDataClient(api_key, api_secret)
 # test range
 # data available from 2021 - present
 start_time = datetime(2021, 1, 1)
-end_time = datetime(2021,1, 2)
+end_time = datetime(2024,1, 1)
 
 # historical data request for trading data
 trade_request = CryptoBarsRequest(
@@ -56,6 +56,7 @@ trade_data = trade_bars.df
 
 print("Testing...")
 
+avg_cost_basis = trade_data["close"].iloc[0]
 last_close = trade_data["close"].iloc[0]
 transactions = 0
 buy_and_hold = trade_data["close"].iloc[trade_data["close"].size - 1] / trade_data["close"].iloc[0]
@@ -90,6 +91,8 @@ for i in range(trade_data["close"].size):
         if change_since_last > TRIGGER:
             # buy
             trade_value = ((usd_balance * TRADE_STRENGTH) / close) * FEE_MULT
+            avg_cost_basis = ((avg_cost_basis * btc_balance / (btc_balance + trade_value)) +
+                              (close * trade_value / (btc_balance + trade_value)))
             btc_balance += trade_value
             usd_balance *= (1 - TRADE_STRENGTH)
         else:
